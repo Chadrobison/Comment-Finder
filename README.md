@@ -5,7 +5,9 @@ A local desktop app for finding one account’s comments and replies on another 
 ## Download the Mac app
 
 The native Apple-silicon build passed its [Mac verification](https://github.com/Chadrobison/Comment-Finder/actions/runs/43772894983).
-Get the packaged app from [GitHub Releases](https://github.com/Chadrobison/Comment-Finder/releases).
+**[Download Comment Finder v1.0.0 for Apple silicon](https://github.com/Chadrobison/Comment-Finder/releases/download/v1.0.0/Comment-Finder-macOS-arm64.zip)**
+
+[Release notes and verification reports](https://github.com/Chadrobison/Comment-Finder/releases/tag/v1.0.0).
 Choose **Comment-Finder-macOS-arm64.zip** from the release assets, unzip it, and drag **Comment Finder.app** into Applications.
 The packaged app includes Python and dependencies; no build commands or Python installation are needed.
 It targets Apple-silicon Macs with macOS 15 or newer. It is ad-hoc signed, not Apple-notarized; macOS may require its normal per-app Open Anyway approval.

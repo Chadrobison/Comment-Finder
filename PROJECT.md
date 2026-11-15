@@ -113,3 +113,19 @@ certificate resources, visible Tk window, queue progress/results, filtering, and
 selected-comment details. No Instagram calls or genuine sessions were used.
 The first CI attempt exposed a lipo argument-order mistake; it was corrected
 before this successful build. Release v1.0.0 repeats these gates before publishing.
+
+
+### Published release
+
+Release v1.0.0: https://github.com/Chadrobison/Comment-Finder/releases/tag/v1.0.0
+
+Tag workflow https://github.com/Chadrobison/Comment-Finder/actions/runs/43773021166
+passed both build and release jobs. It built/tested on macOS 15.8.2 ARM64, ran all
+40 tests successfully and launched the frozen app via LaunchServices. The public
+release ZIP was downloaded back into the development workspace and validated:
+13,486,431 bytes, 420 ZIP entries, ZIP integrity check passed, expected executable
+`Comment Finder.app/Contents/MacOS/Comment Finder` present. SHA-256:
+`ed33c05cf90a558b2ef3728b658b7e6dfb7d96a10a6bd1003ff1e95f25f25bca`.
+The checksum matches the release's SHA256SUMS.txt. Delivery is now a normal HTTPS
+GitHub release asset, not a workspace-path link. Live Instagram use remains
+unverified and the app is not Apple-notarized.
