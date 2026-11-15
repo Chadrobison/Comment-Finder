@@ -20,7 +20,7 @@ python -m PyInstaller --noconfirm --clean --windowed --target-arch arm64 \
 APP_PATH="$PWD/dist/Comment Finder.app"
 APP_EXECUTABLE="$APP_PATH/Contents/MacOS/Comment Finder"
 export APP_PATH APP_EXECUTABLE
-lipo -verify_arch arm64 "$APP_EXECUTABLE"
+lipo "$APP_EXECUTABLE" -verify_arch arm64
 codesign --verify --deep --strict "$APP_PATH"
 # LaunchServices opens the .app as Finder would; smoke mode never starts collection.
 python - <<'PY'
