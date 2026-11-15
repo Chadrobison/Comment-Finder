@@ -221,6 +221,16 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(self.events[-1][1]['status'],'error')
         self.assertTrue(any(r['status']=='error' and r['scope']=='posts' for r in c.coverage))
 
+    def test_managed_session_tokens_are_not_written_to_collector_outputs(self):
+        token='SYNTHETIC-SECRET-TOKEN-NOT-FOR-RESULTS'
+        c=self.collector(Source(),login_user='synthetic_login',
+                         session_data={'sessionid':token,'csrftoken':'SYNTHETIC-CSRF'})
+        self.assertEqual(c.run(),'finished')
+        for path in c.folder.iterdir():
+            self.assertNotIn(token,path.read_text(),str(path))
+            self.assertNotIn('SYNTHETIC-CSRF',path.read_text(),str(path))
+        self.assertNotIn(token,repr(self.events))
+
     def test_error_categories(self):
         cases=[('LoginRequiredException','session needed','authentication'),
                ('PrivateProfileNotFollowedException','private','denied'),

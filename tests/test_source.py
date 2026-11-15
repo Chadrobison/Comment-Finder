@@ -113,6 +113,18 @@ class SourceTests(unittest.TestCase):
             self.assertIs(requests.Session.send, transport)
             self.load.assert_not_called()
 
+    def test_managed_session_uses_dictionary_interface_only(self):
+        data = {'sessionid': 'SYNTHETIC-SESSION-TOKEN', 'csrftoken': 'SYNTHETIC-CSRF'}
+        settings = Settings('synthetic_author', 'synthetic_owner', login_user='synthetic_login',
+                            session_data=data).validate()
+        with patch.object(instaloader.Instaloader, 'load_session') as load_data:
+            with patch.object(requests.Session, 'send') as transport:
+                with InstagramSource(settings, self.cancel):
+                    load_data.assert_called_once_with('synthetic_login', data)
+                transport.assert_not_called()
+        self.load.assert_not_called()
+        self.assertNotIn('SYNTHETIC-SESSION-TOKEN', repr(settings))
+
     def test_rate_controller_cancel_and_429(self):
         with patch.object(requests.Session, 'send') as transport:
             with InstagramSource(self.settings, self.cancel) as source:

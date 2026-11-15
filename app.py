@@ -6,16 +6,23 @@ import threading
 import tkinter as tk
 import webbrowser
 from pathlib import Path
-from tkinter import ttk, filedialog, messagebox
-from core import Collector, Settings, LIMITATION, StorageError, filtered, save_csv
+from tkinter import ttk, filedialog, messagebox, simpledialog
+import auth
+from core import Collector, Settings, LIMITATION, StorageError, Stop, username, filtered, save_csv
 
 RESULTS = Path.home() / 'Documents' / 'Comment Finder Results'
 
 class App:
-    def __init__(self, root, source_factory=None, results_root=RESULTS):
+    def __init__(self, root, source_factory=None, results_root=RESULTS, session_store=None):
         self.root, self.source_factory, self.results_root = root, source_factory, results_root
         self.events, self.cancel_event = queue.Queue(), threading.Event()
         self.running, self.closing = False, False
+        self.auth_running = False
+        self.credentials = None
+        self.session_store = session_store
+        self.auth_cancel = threading.Event()
+        self.login_dialog = None
+        self.code_request = None
         self.rows, self.visible, self.folder = [], [], None
         root.title('Comment Finder')
         root.geometry('1100x820')
@@ -47,6 +54,14 @@ class App:
         root.bind('<MouseWheel>', wheel)
         ttk.Label(outer, text='Comment Finder', style='Title.TLabel').pack(anchor='w')
         ttk.Label(outer, text='A focused search. A clear record of what was checked.').pack(anchor='w', pady=(4, 18))
+        account_bar = ttk.Frame(outer)
+        account_bar.pack(fill='x', pady=(0, 12))
+        self.auth_button = ttk.Button(account_bar, text='Log in to Instagram…', command=self.show_login)
+        self.auth_button.pack(side='left')
+        self.logout_button = ttk.Button(account_bar, text='Log out', command=self.logout, state='disabled')
+        self.logout_button.pack(side='left', padx=8)
+        self.account_status = tk.StringVar(value='Not logged in')
+        ttk.Label(account_bar, textvariable=self.account_status).pack(side='left', padx=4)
         form = ttk.Frame(outer)
         form.pack(fill='x')
         self.author, self.owner = tk.StringVar(), tk.StringVar()
@@ -68,12 +83,12 @@ class App:
             ttk.Label(self.advanced, text=label).grid(row=i//2, column=(i%2)*2, sticky='w', padx=4)
             ttk.Entry(self.advanced, textvariable=var, width=10).grid(row=i//2, column=(i%2)*2+1, padx=8, pady=3)
         self.login, self.session = tk.StringVar(), tk.StringVar()
-        ttk.Label(self.advanced, text='Login username (optional)').grid(row=2, column=0, sticky='w')
+        ttk.Label(self.advanced, text='Legacy session username').grid(row=2, column=0, sticky='w')
         ttk.Entry(self.advanced, textvariable=self.login).grid(row=2, column=1, sticky='ew')
         ttk.Button(self.advanced, text='Choose session file…', command=self.pick_session).grid(row=2, column=2)
         ttk.Button(self.advanced, text='Clear session', command=lambda: (self.login.set(''), self.session.set(''))).grid(row=2, column=3)
         ttk.Label(self.advanced, textvariable=self.session, wraplength=700).grid(row=3, column=0, columnspan=4, sticky='w')
-        ttk.Label(self.advanced, wraplength=850, text='Limits bound how much is examined, not how many matches are found. This Instaloader version requires a session to read comments. Private content must also be accessible to your session. Session files contain sensitive authentication data and can execute code when loaded if malicious. Use only your own trusted file. No passwords are stored.').grid(row=4, column=0, columnspan=4, sticky='w', pady=6)
+        ttk.Label(self.advanced, wraplength=850, text='Limits bound how much is examined, not how many matches are found. Use Log in to Instagram above for normal sign-in. An optional legacy session file overrides in-app login for the next search. Private content must be accessible to that account. Legacy session files contain sensitive authentication data and can execute code when loaded if malicious. Use only your own trusted file. No passwords are stored.').grid(row=4, column=0, columnspan=4, sticky='w', pady=6)
         actions = ttk.Frame(outer)
         actions.pack(fill='x', pady=8)
         self.start_button = ttk.Button(actions, text='Start Search', command=self.start)
@@ -120,6 +135,158 @@ class App:
         root.protocol('WM_DELETE_WINDOW', self.close)
         self.poll_id = root.after(100, self.poll)
 
+    def get_session_store(self):
+        if self.session_store is None:
+            self.session_store = auth.SessionStore()
+        return self.session_store
+
+    def restore_saved_session(self):
+        """Production startup only: load this app's explicitly remembered JSON session."""
+        if self.running or self.auth_running:
+            return
+        try:
+            self.credentials = self.get_session_store().load()
+            if self.credentials:
+                self.account_status.set(f'Logged in as @{self.credentials.username} • remembered session')
+                self.logout_button.configure(state='normal')
+                self.status.set('Remembered session restored locally. Instagram will check whether it is still valid when you search.')
+        except Exception:
+            self.credentials = None
+            self.account_status.set('Not logged in')
+            self.status.set('The remembered session could not be read. Log in again or use Log out to remove it.')
+            self.logout_button.configure(state='normal')
+
+    def show_login(self):
+        if self.running or self.auth_running or self.closing:
+            return
+        if self.login_dialog is not None and self.login_dialog.winfo_exists():
+            self.login_dialog.lift()
+            return
+        dialog = self.login_dialog = tk.Toplevel(self.root)
+        dialog.title('Log in to Instagram')
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+        frame = ttk.Frame(dialog, padding=22)
+        frame.pack(fill='both', expand=True)
+        user = tk.StringVar(value=self.credentials.username if self.credentials else '')
+        password = tk.StringVar()
+        remember = tk.BooleanVar(value=False)
+        # Exposed widget references permit offline integration tests, never persistence.
+        self.login_username_var, self.login_password_var, self.remember_var = user, password, remember
+        ttk.Label(frame, text='Your Instagram account', style='Title.TLabel').pack(anchor='w', pady=(0, 12))
+        ttk.Label(frame, text='Username').pack(anchor='w')
+        username_entry = ttk.Entry(frame, textvariable=user, width=42)
+        username_entry.pack(fill='x', pady=(4, 10))
+        ttk.Label(frame, text='Password').pack(anchor='w')
+        self.password_entry = ttk.Entry(frame, textvariable=password, show='•', width=42)
+        self.password_entry.pack(fill='x', pady=(4, 10))
+        ttk.Checkbutton(frame, text='Remember this session on this Mac', variable=remember).pack(anchor='w')
+        ttk.Label(frame, wraplength=430, text='Your password is used only for this login and is never saved. A remembered session grants account access and is saved only in this app’s private local folder. Instagram may ask for a verification code.').pack(anchor='w', pady=12)
+        buttons = ttk.Frame(frame)
+        buttons.pack(fill='x')
+        ttk.Button(buttons, text='Log in', command=self.submit_login).pack(side='left')
+        ttk.Button(buttons, text='Cancel', command=self.dismiss_login).pack(side='left', padx=8)
+        dialog.protocol('WM_DELETE_WINDOW', self.dismiss_login)
+        dialog.bind('<Return>', lambda event: self.submit_login())
+        dialog.bind('<Escape>', lambda event: self.dismiss_login())
+        username_entry.focus_set()
+
+    def dismiss_login(self):
+        if hasattr(self, 'login_password_var'):
+            self.login_password_var.set('')
+        if self.login_dialog is not None:
+            self.login_dialog.destroy()
+            self.login_dialog = None
+
+    def submit_login(self):
+        if self.auth_running or self.running or self.closing or self.login_dialog is None:
+            return
+        password = self.login_password_var.get()
+        self.login_password_var.set('')
+        try:
+            login_user = username(self.login_username_var.get())
+            if not password:
+                raise ValueError('Enter your Instagram password. It will not be saved.')
+        except ValueError as error:
+            messagebox.showerror('Check your login', str(error), parent=self.login_dialog)
+            return
+        remember = self.remember_var.get()
+        self.dismiss_login()
+        self.auth_cancel = threading.Event()
+        self.auth_running = True
+        self.auth_button.configure(state='disabled')
+        self.logout_button.configure(state='disabled')
+        self.start_button.configure(state='disabled')
+        self.cancel_button.configure(state='normal')
+        self.status.set('Logging in… You can cancel. Your password is not saved.')
+
+        def request_code():
+            request = {'ready': threading.Event(), 'code': None}
+            self.events.put(('auth_code', request))
+            while not request['ready'].wait(.1):
+                if self.auth_cancel.is_set():
+                    raise Stop('cancelled')
+            code = request.pop('code', None)
+            if self.auth_cancel.is_set():
+                raise Stop('cancelled')
+            return code
+
+        def work():
+            nonlocal password
+            try:
+                credentials = auth.login(login_user, password, self.auth_cancel, request_code,
+                                         remember=False, store=self.get_session_store())
+                if self.auth_cancel.is_set():
+                    raise Stop('cancelled')
+                warning = ''
+                try:
+                    if remember:
+                        self.get_session_store().save(credentials)
+                    else:
+                        self.get_session_store().clear()
+                except Exception:
+                    warning = (' Login succeeded, but the remembered session could not be updated. '
+                               'An older saved session may remain; use Log out to remove it.')
+                if self.auth_cancel.is_set():
+                    cleanup_warning = ''
+                    if remember:
+                        try:
+                            self.get_session_store().clear()
+                        except Exception:
+                            cleanup_warning = ' The new saved session could not be removed; use Log out to retry.'
+                    self.events.put(('auth_done', {'message': 'Login cancelled. No search was started.' + cleanup_warning,
+                                                   'cleanup_failed': bool(cleanup_warning)}))
+                    return
+                self.events.put(('auth_done', {'credentials': credentials, 'remembered': remember and not warning,
+                                               'save_attempted': remember,
+                                               'message': 'Logged in. You can start your search.' + warning}))
+            except Stop:
+                self.events.put(('auth_done', {'message': 'Login cancelled. No search was started.'}))
+            except auth.AuthError as error:
+                self.events.put(('auth_done', {'message': str(error)}))
+            except Exception:
+                self.events.put(('auth_done', {'message': 'Login could not be completed. Check your connection and try again later.'}))
+            finally:
+                password = ''
+        self.auth_worker = threading.Thread(target=work, daemon=False)
+        self.auth_worker.start()
+
+    def logout(self):
+        if self.running or self.auth_running:
+            return
+        self.dismiss_login()
+        self.credentials = None
+        self.login.set('')
+        self.session.set('')
+        self.account_status.set('Not logged in')
+        try:
+            self.get_session_store().clear()
+            self.status.set('Logged out of this app. Its remembered session was removed; other Instagram devices are unchanged.')
+            self.logout_button.configure(state='disabled')
+        except Exception:
+            self.status.set('Logged out in this window, but the saved session could not be removed. It may be restored on next launch; try Log out again.')
+            self.logout_button.configure(state='normal')
+
     def toggle_advanced(self):
         if self.advanced.winfo_manager():
             self.advanced.pack_forget()
@@ -132,23 +299,31 @@ class App:
         path = filedialog.askopenfilename(title='Choose your own trusted Instaloader session')
         if path:
             self.session.set(path)
+            self.status.set('The selected legacy file will be used for the next search instead of in-app login.')
 
     def start(self):
-        if self.running:
+        if self.running or self.auth_running or self.closing:
             return
         try:
+            using_saved = self.credentials is not None and not self.session.get()
             settings = Settings(self.author.get(), self.owner.get(), self.own.get(),
-                **{k:v.get() for k,v in self.limits.items()}, login_user=self.login.get().strip(), session_file=self.session.get()).validate()
+                **{k:v.get() for k,v in self.limits.items()},
+                login_user=self.credentials.username if using_saved else self.login.get().strip(),
+                session_data=self.credentials.data if using_saved else None,
+                session_file=self.session.get()).validate()
         except ValueError as error:
             messagebox.showerror('Check your settings', str(error))
             return
         if settings.session_file and not messagebox.askokcancel('Trust this session file?',
             'Loading a malicious Instaloader session file can execute code. Continue only if this is your own file from a trusted source. No password will be stored.'):
             return
+        self.dismiss_login()
         self.rows, self.folder = [], None
         self.refresh()
         self.cancel_event = threading.Event()
         self.running = True
+        self.auth_button.configure(state='disabled')
+        self.logout_button.configure(state='disabled')
         self.start_button.configure(state='disabled')
         self.cancel_button.configure(state='normal')
         self.status.set('Searching… Results are saved as they are found. Settings changes apply to the next search.')
@@ -167,6 +342,13 @@ class App:
         self.worker.start()
 
     def cancel(self):
+        if self.auth_running:
+            self.auth_cancel.set()
+            if self.code_request is not None:
+                self.code_request['ready'].set()
+            self.cancel_button.configure(state='disabled')
+            self.status.set('Cancelling login… An active request may need to finish. No new request will start.')
+            return
         self.cancel_event.set()
         self.cancel_button.configure(state='disabled')
         self.status.set('Cancelling… An active request or library pause may need to finish. Requests use a 30-second socket timeout, not a total time limit. Collected results will be kept.')
@@ -178,7 +360,44 @@ class App:
                 kind, data = self.events.get_nowait()
             except queue.Empty:
                 break
-            if kind == 'match':
+            if kind == 'auth_code':
+                self.code_request = data
+                if not self.auth_cancel.is_set() and not self.closing:
+                    self.status.set('Instagram requested a verification code. Enter it in the dialog, or cancel.')
+                    data['code'] = simpledialog.askstring('Instagram verification code',
+                        'Enter the code from your authenticator or Instagram message:', parent=self.root)
+                    if data['code'] is None:
+                        self.auth_cancel.set()
+                if self.auth_cancel.is_set():
+                    data['code'] = None
+                data['ready'].set()
+                self.code_request = None
+            elif kind == 'auth_done':
+                if self.auth_worker.is_alive():
+                    self.events.put((kind, data))
+                    break
+                self.auth_running = False
+                if data.get('credentials') is not None and self.auth_cancel.is_set():
+                    data['message'] = 'Login cancelled. No search was started.'
+                    if data.get('save_attempted'):
+                        try:
+                            self.get_session_store().clear()
+                        except Exception:
+                            data['message'] += ' The new saved session could not be removed; use Log out to retry.'
+                            data['cleanup_failed'] = True
+                    data.pop('credentials', None)
+                if data.get('credentials') is not None:
+                    self.credentials = data['credentials']
+                    self.login.set('')
+                    self.session.set('')
+                    suffix = ' • remembered session' if data['remembered'] else ' • this window only'
+                    self.account_status.set(f'Logged in as @{self.credentials.username}' + suffix)
+                self.auth_button.configure(state='normal')
+                self.logout_button.configure(state='normal' if self.credentials or data.get('cleanup_failed') else 'disabled')
+                self.start_button.configure(state='normal')
+                self.cancel_button.configure(state='disabled')
+                self.status.set(data['message'])
+            elif kind == 'match':
                 self.rows.append(data)
                 dirty = True
             elif kind == 'folder':
@@ -186,13 +405,18 @@ class App:
             elif kind == 'progress':
                 self.progress.set(f"Account: @{data['account']}  •  Post: {data['post'] or 'looking up posts'}  •  {data['parents']} comments + {data['replies']} replies examined  •  {data['matches']} matches")
             elif kind == 'done':
+                if hasattr(self, 'worker') and self.worker.is_alive():
+                    self.events.put((kind, data))
+                    break
                 self.running = False
+                self.auth_button.configure(state='normal')
+                self.logout_button.configure(state='normal' if self.credentials else 'disabled')
                 self.start_button.configure(state='normal')
                 self.cancel_button.configure(state='disabled')
                 self.status.set(data['message'] + ('\n' + data['detail'] if data.get('detail') else ''))
         if dirty:
             self.refresh()
-        if self.closing and not self.running:
+        if self.closing and not self.running and not self.auth_running:
             self.root.destroy()
             return
         self.poll_id = self.root.after(100, self.poll)
@@ -245,7 +469,8 @@ class App:
             messagebox.showerror('Could not open folder', str(error))
 
     def close(self):
-        if self.running:
+        self.dismiss_login()
+        if self.running or self.auth_running:
             self.closing = True
             self.cancel()
         else:
@@ -283,6 +508,8 @@ def smoke_test(report_path=None):
             report['instaloader_version'] = instaloader.__version__
             report['checks'].append('backend_import_and_certificates')
             with patch.object(instaloader.Instaloader, 'load_session_from_file', forbidden), \
+                 patch.object(instaloader.Instaloader, 'load_session', forbidden), \
+                 patch.object(auth.SessionStore, 'load', forbidden), \
                  patch.object(InstagramSource, 'posts', forbidden):
                 root = tk.Tk()
                 root.title('Comment Finder — OFFLINE SYNTHETIC SMOKE TEST')
@@ -298,6 +525,18 @@ def smoke_test(report_path=None):
                 if not root.winfo_ismapped():
                     raise AssertionError('The Tk window did not open.')
                 report['checks'].append('tk_window_opened')
+                if app.account_status.get() != 'Not logged in' or app.credentials is not None:
+                    raise AssertionError('Smoke mode unexpectedly loaded authentication data.')
+                report['checks'].append('login_ui_starts_without_session_loading')
+                app.show_login()
+                root.update_idletasks()
+                if not app.password_entry.cget('show') or app.remember_var.get():
+                    raise AssertionError('Login defaults must mask passwords and leave Remember unchecked.')
+                app.login_password_var.set('SYNTHETIC_ONLY_PASSWORD')
+                app.dismiss_login()
+                if app.login_password_var.get():
+                    raise AssertionError('Dismissing login did not clear the password field.')
+                report['checks'].append('login_dialog_masked_password_and_opt_in_remember')
                 row = dict(author_username='synthetic_author', post_owner='synthetic_owner',
                            post_id='SYNTHETIC_POST', post_shortcode='SYNTHETIC_ONLY',
                            post_url='https://example.invalid/SYNTHETIC_ONLY',
@@ -379,5 +618,6 @@ if __name__ == '__main__':
     if arguments.smoke_test is not None:
         sys.exit(smoke_test(arguments.smoke_test or None))
     root = tk.Tk()
-    App(root)
+    application = App(root)
+    application.restore_saved_session()
     root.mainloop()

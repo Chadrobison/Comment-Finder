@@ -154,7 +154,7 @@ class UiTests(unittest.TestCase):
         self.assertEqual(str(self.app.start_button['state']), 'normal')
 
     def test_failure_messages_reach_ui(self):
-        for mode, phrase in [('authentication','Authentication is required'), ('denied','Access is denied'), ('blocked','blocked or rate-limited'), ('error','network or other error')]:
+        for mode, phrase in [('authentication','Authentication is required'), ('denied','Instagram refused this request'), ('blocked','blocked or rate-limited'), ('error','network or other error')]:
             self.mode = 'fail:' + mode
             self.complete_search()
             self.assertIn(phrase, self.app.status.get())

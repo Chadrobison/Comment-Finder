@@ -4,7 +4,7 @@ import json
 import os
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -18,8 +18,8 @@ MESSAGES = {
     'limits': 'A collection limit was reached. Additional material was not checked.',
     'gaps': 'Search finished with skipped material. Read the coverage report.',
     'cancelled': 'Search cancelled. Collected results are preserved.',
-    'authentication': 'Authentication is required or the session expired. You may supply your own trusted session in Advanced Settings.',
-    'denied': 'Access is denied. The account or posts may be private or unavailable to your session.',
+    'authentication': 'Authentication is required or the session expired. Use Log in to Instagram with your own account, or select a trusted session in Advanced Settings.',
+    'denied': 'Instagram refused this request. HTTP 403 does not prove an account is private; Instagram may restrict app requests even for public posts. Log in with your own account if you have not already.',
     'blocked': 'Instagram blocked or rate-limited requests. Collection stopped; no automatic retry will be made.',
     'error': 'A network or other error occurred. Collection stopped; results may be partial.',
     'write_error': 'Could not save results. Last successful checkpoints remain; newer results may exist only in this window.',
@@ -50,6 +50,7 @@ class Settings:
     max_total: int = 10000
     login_user: str = ''
     session_file: str = ''
+    session_data: dict | None = field(default=None, repr=False)
 
     def validate(self):
         self.author, self.owner = username(self.author), username(self.owner)
@@ -61,6 +62,13 @@ class Settings:
             except (TypeError, ValueError):
                 raise ValueError('Each collection limit must be a whole number between 1 and 1,000,000.') from None
             setattr(self, name, value)
+        if self.session_data is not None:
+            if self.session_file:
+                raise ValueError('Choose in-app login or an external session file, not both.')
+            self.login_user = username(self.login_user)
+            if not isinstance(self.session_data, dict) or not self.session_data or any(not isinstance(k,str) or not isinstance(v,str) for k,v in self.session_data.items()):
+                raise ValueError('The login session is invalid. Log in again.')
+            return self
         if bool(self.login_user.strip()) != bool(self.session_file.strip()):
             raise ValueError('For a session, provide both its login username and the session file, or leave both empty.')
         if self.login_user.strip():

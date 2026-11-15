@@ -13,7 +13,7 @@ print('Native Tk initialized:', root.tk.call('info', 'patchlevel'))
 root.destroy()
 PY
 python -m unittest discover -s tests -v 2>&1 | tee release/offline-tests.log
-python -m compileall -q app.py core.py source.py tests
+python -m compileall -q app.py core.py source.py auth.py tests
 python -m PyInstaller --noconfirm --clean --windowed --target-arch arm64 \
   --name 'Comment Finder' --osx-bundle-identifier local.commentfinder.desktop app.py \
   2>&1 | tee release/pyinstaller.log
@@ -52,6 +52,7 @@ report = {
     'offline_tests': 'passed; see offline-tests.log',
     'packaged_app_smoke': 'passed; see packaged-smoke.json',
     'live_instagram_tested': False,
+    'live_login_tested': False,
     'real_session_loaded': False,
     'signing': 'ad-hoc; no Developer ID identity or Apple notarization',
 }
@@ -72,10 +73,15 @@ Do not disable Gatekeeper or remove quarantine attributes. If per-app approval
 is unavailable, stop and report the displayed error.
 
 Offline tests and a packaged-app smoke check passed. No real Instagram searches,
-login, account collection, or real sessions were used. Live collection remains
-unverified. Instaloader 4.15.1 requires a logged-in session for comment retrieval.
-Only use your own trusted existing session: malicious session files can execute
-code. The app never searches for browser cookies or stores passwords.
+login, account collection, or real sessions were used. Live Instagram login and
+collection remain unverified. Sign in to your own Instagram account inside the
+app; no Terminal login is needed. Instaloader 4.15.1 requires a logged-in session
+for comment retrieval. Your password is never saved. Optional Remember session
+saves sensitive session data to ~/Library/Application Support/Comment Finder/
+session.json as a user-only JSON file (0600 in a 0700 folder). Log out clears
+the local session, not the Instagram session on the server. The app never
+searches for browser cookies. Advanced Settings can still load your own trusted
+legacy session file; a malicious legacy file can execute code.
 
 Enter author A in Whose comments? and account B in Search comments on whose posts?.
 Advanced Settings contains limits and optional session-file selection.

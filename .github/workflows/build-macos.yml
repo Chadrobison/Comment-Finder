@@ -73,7 +73,7 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Download **Comment-Finder-macOS-arm64.zip**, unzip it in Finder, and drag **Comment Finder.app** to Applications. No Python installation or Terminal commands are needed for the packaged app.
 
-          Built and tested on macOS 15 / Apple silicon. Older macOS versions and Intel Macs are not verified. Offline tests and a packaged-app smoke check passed; no Instagram searches, logins, or real sessions were used. Live Instagram collection remains unverified. Instaloader 4.15.1 requires your own trusted logged-in session for comments.
+          Built and tested on macOS 15 / Apple silicon. Older macOS versions and Intel Macs are not verified. Offline tests and a packaged-app smoke check passed; no Instagram searches, logins, or real sessions were used. Live Instagram login and collection remain unverified. Sign in to your own Instagram account inside the app; no Terminal login is needed. Instaloader 4.15.1 requires a logged-in session for comments. Your password is never saved. Optional Remember session saves sensitive session data locally as a JSON file restricted to your user account. Log Out clears the local session; it does not revoke it on Instagram. Advanced Settings still accepts your own trusted legacy session file, which can execute code if malicious.
 
           The app is ad-hoc signed, not Developer ID signed or Apple-notarized. macOS may require its normal per-app Open Anyway approval in System Settings → Privacy & Security. Do not disable Gatekeeper or remove quarantine attributes. If macOS does not offer per-app approval, stop and report the error.
 
