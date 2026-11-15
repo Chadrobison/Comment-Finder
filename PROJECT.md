@@ -134,4 +134,8 @@ unverified and the app is not Apple-notarized.
 
 ### Version 1.1 login release verification
 
-In-app login is developed and tested only with mocked authentication responses and synthetic session data. No real Instagram login, two-factor code, session or search is used during development or CI. Version 1.1 native build/test results and release links will be recorded here after the release workflow succeeds; the version 1.0 results above do not verify the new login feature.
+In-app login is developed and tested only with mocked authentication responses and synthetic session data. No real Instagram login, two-factor code, session or search is used during development or CI. Release v1.1.0 is published at https://github.com/Chadrobison/Comment-Finder/releases/tag/v1.1.0.
+
+Commit `74989d536f652cae220119d3b90b8e83b1a2ef78` passed all 74 offline tests on Linux and native macOS. Main build run https://github.com/Chadrobison/Comment-Finder/actions/runs/43777214637 and release run https://github.com/Chadrobison/Comment-Finder/actions/runs/43777232965 succeeded. The macOS 15.8.2 ARM64 packaged app launched through LaunchServices; its smoke check verified the login dialog, masked password, default-off Remember option, dismissal password clearing, no session loading, and existing results controls. Native architecture and ad-hoc signing checks passed.
+
+The published ZIP was downloaded and verified: 13,503,297 bytes, 420 entries, valid ZIP integrity and expected app executable. SHA-256 `d98d3396e09ab8f678e8d6200af17c7d3faf80c39bd9d4d0f4a4b2af0aa61041` matches the attached checksum. Live login remains unverified; Instagram can still reject login or collection.
