@@ -4,8 +4,8 @@ A local desktop app for finding one account’s comments and replies on another 
 
 ## Download the Mac app
 
-The native Apple-silicon build is being verified in [GitHub Actions](https://github.com/Chadrobison/Comment-Finder/actions).
-After successful verification, the `.app` download will be available in [Releases](https://github.com/Chadrobison/Comment-Finder/releases).
+The native Apple-silicon build passed its [Mac verification](https://github.com/Chadrobison/Comment-Finder/actions/runs/43772894983).
+Get the packaged app from [GitHub Releases](https://github.com/Chadrobison/Comment-Finder/releases).
 Choose **Comment-Finder-macOS-arm64.zip** from the release assets, unzip it, and drag **Comment Finder.app** into Applications.
 The packaged app includes Python and dependencies; no build commands or Python installation are needed.
 It targets Apple-silicon Macs with macOS 15 or newer. It is ad-hoc signed, not Apple-notarized; macOS may require its normal per-app Open Anyway approval.
@@ -23,7 +23,7 @@ The launchers are unsigned local scripts. If macOS blocks opening one, inspect t
 
 After installing Python, double-click **Build Mac App.command**. It performs dependency setup automatically and builds a native Apple-silicon **Comment Finder.app**. This may take several minutes and needs internet to download PyInstaller the first time. When Finder opens the `dist` folder, drag **Comment Finder.app** into **Applications**. Open it there, and drag it to the Dock if desired. Future launches of that built app do not need Terminal or the source folder.
 
-The build must run on your Mac. This delivery was prepared on Linux and does **not** include a verified, signed, or notarized Mac binary. The build is automated, but its result and macOS appearance still need your verification. The generated app is for Apple silicon, not Intel Macs. Building with Python running under Rosetta is intentionally rejected.
+This alternative source build must run on your Mac. The downloadable release was built and smoke-tested on an Apple-silicon macOS runner; it is ad-hoc signed but not Developer ID signed or Apple-notarized. The source build remains available if you prefer to build locally. The generated app is for Apple silicon, not Intel Macs. Building with Python running under Rosetta is intentionally rejected.
 
 ## Your first search
 

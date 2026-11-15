@@ -35,7 +35,7 @@ Runtime: Python 3.10–3.13 with Tk; Python.org’s Python **3.13 universal2 mac
 
 Follow **README.md**. In brief: unzip, install Python 3.13 universal2 from Python.org, and double-click **Open Comment Finder.command**. Setup downloads dependencies into `.venv` on first use. To make a Dock app, double-click **Build Mac App.command**, then move `dist/Comment Finder.app` to Applications.
 
-Use macOS’s normal per-file trust approval if required; do not disable security protections. No administrator action is required by these scripts. The Python installer may ask for its normal installation permission. Packaging has to run on macOS; the current Linux workspace cannot build or verify a native Mac `.app`. The app is not signed with a developer identity or notarized. No paid Apple account is required for the local build workflow.
+Use macOS’s normal per-file trust approval if required; do not disable security protections. No administrator action is required by these scripts. The Python installer may ask for its normal installation permission. Packaging runs on macOS. GitHub Actions has now built and verified the native `.app` on an Apple-silicon Mac runner; the local development workspace remains Linux. The app is not signed with a developer identity or notarized. No paid Apple account is required for the local build workflow.
 
 ## Reading outcomes
 
@@ -68,7 +68,7 @@ Release verification completed on 2026-11-15:
 
 The requested Builder, Architect, QA Engineer, Scout, Verifier and ReleaseOps roles participated. Their findings were integrated and the complete suite was rerun after fixes.
 
-Still unverified: live Instagram behavior and availability; loading a genuine user session; native macOS/Tk layout and dialogs; Apple-silicon packaging, signing behavior and Finder/Dock launch. These require the user’s Mac and, for live testing, the user’s own decision to run a search. Offline success does not establish live collection success.
+Still unverified: live Instagram behavior and availability; loading a genuine user session; the user’s own Mac, Dock behavior, and Gatekeeper approval for an internet-downloaded app. Native macOS Tk tests, Apple-silicon packaging, ad-hoc signature verification and LaunchServices launch now pass in CI. These require the user’s Mac and, for live testing, the user’s own decision to run a search. Offline success does not establish live collection success.
 
 Known limitations: the pinned version’s internal iPhone reply path may return only one page of replies, so iterator exhaustion does not establish full reply coverage. Instagram can change or reject its APIs; comments may be hidden/deleted/unreturned; limits and cancellation produce partial coverage; the app does not resume unfinished searches or reload old CSVs into its table. Existing searches remain readable as CSV/JSON files. Searching creates network requests to Instagram only after Start Search; Open Post intentionally opens the chosen public link in the user’s browser. Dependency installation accesses package repositories. No collected data is uploaded by this app.
 
@@ -84,10 +84,10 @@ Official Instaloader documentation was retrieved during development on 2026-11-1
 The current documentation also describes behavior newer than 4.15.1. Installed 4.15.1 source is inspected for the transport integration, and the dependency is pinned so a future upstream change does not silently alter this guard. Upgrading Instaloader requires rerunning transport and collection tests and reviewing these assumptions.
 
 
-## GitHub app delivery (prepared; native build pending)
+## GitHub app delivery
 
 The user authorized GitHub access and delivery of a working packaged app. The user created the public repository https://github.com/Chadrobison/Comment-Finder
-and approved publishing the source. The native build is pending execution.
+and approved publishing the source. The native build and packaged-app smoke test passed.
 
 `.github/workflows/build-macos.yml` and `scripts/build_mac_ci.sh` automate a native
 Apple-silicon macOS 15 build with Python 3.13 and PyInstaller 6.16.0. A successful
@@ -98,7 +98,18 @@ checks rendering/filtering and exits. No real Instagram collection occurs in CI.
 The packaged app will bundle Python, Tk and dependencies; end users will not need
 Python or build commands. It is ad-hoc signed, not Developer ID signed/notarized.
 
-The user approved public source publication. Public standard GitHub
-runners are free; private builds may consume paid allowance. No billable build
-has been started. Native build verification and the final release URL must be
-recorded after GitHub execution succeeds, not inferred from Linux offline tests.
+The user approved public source publication. The standard public macOS runner is free; no paid or larger runner was used.
+
+
+### Native release verification
+
+Commit `2a163eec8c3b6f01027dd234702d24d4565d939b` passed native build run
+https://github.com/Chadrobison/Comment-Finder/actions/runs/43772894983 on 2026-11-15.
+All 40 offline tests passed on macOS with Python 3.13.17 and Tk 8.6.18. PyInstaller
+6.16.0 produced an ARM64 app; architecture and ad-hoc signature checks passed.
+LaunchServices (`open -W`, the same app launch system used by Finder) opened the
+frozen app. Its smoke report confirmed Darwin/arm64/frozen=true, backend and
+certificate resources, visible Tk window, queue progress/results, filtering, and
+selected-comment details. No Instagram calls or genuine sessions were used.
+The first CI attempt exposed a lipo argument-order mistake; it was corrected
+before this successful build. Release v1.0.0 repeats these gates before publishing.
