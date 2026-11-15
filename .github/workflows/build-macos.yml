@@ -1,0 +1,82 @@
+name: Build and verify Mac app
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Apple-silicon app and offline tests
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up native Python with bundled Tk
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: arm64
+      - name: Install app and packaging dependencies
+        run: python -m pip install -r requirements.txt 'pyinstaller==6.16.0'
+      - name: Test, package, and smoke-test the app
+        run: bash scripts/build_mac_ci.sh
+      - name: Upload verified app and verification reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Comment-Finder-macOS-arm64
+          path: |
+            release/Comment-Finder-macOS-arm64.zip
+            release/SHA256SUMS.txt
+            release/verification.json
+            release/packaged-smoke.json
+            release/README-MAC.txt
+            release/offline-tests.log
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-build-diagnostics
+          path: |
+            release/*.log
+            release/*smoke.json
+            release/verification.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Publish verified tagged app
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Comment-Finder-macOS-arm64
+          path: release
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Download **Comment-Finder-macOS-arm64.zip**, unzip it in Finder, and drag **Comment Finder.app** to Applications. No Python installation or Terminal commands are needed for the packaged app.
+
+          Built and tested on macOS 15 / Apple silicon. Older macOS versions and Intel Macs are not verified. Offline tests and a packaged-app smoke check passed; no Instagram searches, logins, or real sessions were used. Live Instagram collection remains unverified. Instaloader 4.15.1 requires your own trusted logged-in session for comments.
+
+          The app is ad-hoc signed, not Developer ID signed or Apple-notarized. macOS may require its normal per-app Open Anyway approval in System Settings → Privacy & Security. Do not disable Gatekeeper or remove quarantine attributes. If macOS does not offer per-app approval, stop and report the error.
+
+          Verification reports and SHA-256 checksums are attached alongside the app.
+          NOTES
+          gh release create "$RELEASE_TAG" release/Comment-Finder-macOS-arm64.zip release/SHA256SUMS.txt release/verification.json release/packaged-smoke.json release/README-MAC.txt release/offline-tests.log --verify-tag --title "Comment Finder $RELEASE_TAG" --notes-file release-notes.md
