@@ -6,7 +6,7 @@ A local desktop app for finding one account’s comments and replies on another 
 
 **[Download the latest Comment Finder for Apple silicon](https://github.com/Chadrobison/Comment-Finder/releases/latest/download/Comment-Finder-macOS-arm64.zip)**
 
-[Release notes and verification reports](https://github.com/Chadrobison/Comment-Finder/releases/latest). The sign-in instructions below describe version 1.1; check the release version when downloading.
+[Release notes and verification reports](https://github.com/Chadrobison/Comment-Finder/releases/latest). The instructions below describe version 1.1.1; check the release version when downloading.
 Choose **Comment-Finder-macOS-arm64.zip** from the release assets, unzip it, and drag **Comment Finder.app** into Applications.
 The packaged app includes Python and dependencies; no build commands or Python installation are needed.
 It targets Apple-silicon Macs with macOS 15 or newer. It is ad-hoc signed, not Apple-notarized; macOS may require its normal per-app Open Anyway approval.
@@ -25,6 +25,12 @@ The launchers are unsigned local scripts. If macOS blocks opening one, inspect t
 After installing Python, double-click **Build Mac App.command**. It performs dependency setup automatically and builds a native Apple-silicon **Comment Finder.app**. This may take several minutes and needs internet to download PyInstaller the first time. When Finder opens the `dist` folder, drag **Comment Finder.app** into **Applications**. Open it there, and drag it to the Dock if desired. Future launches of that built app do not need Terminal or the source folder.
 
 This alternative source build must run on your Mac. The downloadable release was built and smoke-tested on an Apple-silicon macOS runner; it is ad-hoc signed but not Developer ID signed or Apple-notarized. The source build remains available if you prefer to build locally. The generated app is for Apple silicon, not Intel Macs. Building with Python running under Rosetta is intentionally rejected.
+
+## Updating from version 1.1.0
+
+Version 1.1.1 updates Instaloader to 4.16 and includes a narrowly scoped metadata request correction after a reported HTTP 400 search failure. The correction comes from an upstream Instaloader change that is still under review; it is not yet part of an official Instaloader release. Quit the old app, download the new ZIP, and replace **Comment Finder.app** in Applications. Your result folders and app-managed remembered session are stored separately and are not replaced. If you use the source launcher instead, it updates the private dependency environment on its next launch.
+
+This update has no live-success guarantee: Instagram can still reject requests or provide incomplete data. If a search fails, the message now identifies the stage (such as profile lookup, post listing, comments or replies), request category, HTTP status and a recognized response signal when available. An HTTP 400 alone does not tell us whether the cause is an API change or an Instagram restriction. If collection stops before examining any comments or replies, the app says so explicitly; it cannot determine whether the account commented. Keep `coverage.csv` and `status.json` from that search; avoid repeatedly starting the same failed search. Development tests use synthetic data only.
 
 ## Log in inside the app
 
@@ -55,7 +61,7 @@ Click **Open Results Folder**. Each search has its own dated folder inside **Doc
 
 - `matching_comments.csv`: all collected matches, including dates, text, author, post owner/link, comment ID and parent-comment ID.
 - `coverage.csv`: what was checked, skipped, interrupted, or limited.
-- `status.json`: the run’s status and settings. `unfinished` means the run did not record a final outcome, for example after a crash.
+- `status.json`: the run’s status, settings, Instaloader version and metadata-routing correction status. `unfinished` means the run did not record a final outcome, for example after a crash.
 
 CSV cells that could be interpreted as spreadsheet formulas are prefixed with an apostrophe. This is intentional; original comment text remains visible in the app. Exports are snapshots; exporting during a search does not include later matches.
 

@@ -13,7 +13,7 @@ print('Native Tk initialized:', root.tk.call('info', 'patchlevel'))
 root.destroy()
 PY
 python -m unittest discover -s tests -v 2>&1 | tee release/offline-tests.log
-python -m compileall -q app.py core.py source.py auth.py tests
+python -m compileall -q app.py core.py source.py auth.py compatibility.py tests
 python -m PyInstaller --noconfirm --clean --windowed --target-arch arm64 \
   --name 'Comment Finder' --osx-bundle-identifier local.commentfinder.desktop app.py \
   2>&1 | tee release/pyinstaller.log
@@ -48,6 +48,7 @@ report = {
     'python': sys.version,
     'tk': tkinter.TkVersion,
     'instaloader': importlib.metadata.version('instaloader'),
+    'metadata_routing_backport': 'PR #2795 e3343a846cd7210902600b226dacf1b0586bd9e3; upstream unmerged',
     'pyinstaller': importlib.metadata.version('pyinstaller'),
     'offline_tests': 'passed; see offline-tests.log',
     'packaged_app_smoke': 'passed; see packaged-smoke.json',
@@ -75,8 +76,11 @@ is unavailable, stop and report the displayed error.
 Offline tests and a packaged-app smoke check passed. No real Instagram searches,
 login, account collection, or real sessions were used. Live Instagram login and
 collection remain unverified. Sign in to your own Instagram account inside the
-app; no Terminal login is needed. Instaloader 4.15.1 requires a logged-in session
-for comment retrieval. Your password is never saved. Optional Remember session
+app; no Terminal login is needed. This update uses Instaloader 4.16 and a narrow
+metadata-routing backport from upstream PR #2795, which is still unmerged. The
+adapter retains existing query identifiers/variables, with no retry or fallback. This update is not a guarantee that live requests
+will succeed or every comment will be available. Comment retrieval requires a
+logged-in session. Your password is never saved. Optional Remember session
 saves sensitive session data to ~/Library/Application Support/Comment Finder/
 session.json as a user-only JSON file (0600 in a 0700 folder). Log out clears
 the local session, not the Instagram session on the server. The app never
@@ -84,7 +88,14 @@ searches for browser cookies. Advanced Settings can still load your own trusted
 legacy session file; a malicious legacy file can execute code.
 
 Enter author A in Whose comments? and account B in Search comments on whose posts?.
-Advanced Settings contains limits and optional session-file selection.
+Advanced Settings contains limits and optional session-file selection. If a
+request is rejected, the error identifies the collection stage, request category,
+HTTP status and a recognized response signal when available. HTTP 400 alone
+does not establish whether an API change or Instagram restriction caused it.
+Keep coverage.csv and status.json from the search for diagnosis. The new HTTP
+rejection messages exclude credentials, raw response bodies and arbitrary
+request URLs. If nothing was examined, the app explicitly says it cannot
+determine whether the account commented.
 Results only describe material checked, never a complete history. Cancellation
 preserves collected results and may wait for an active network request to finish.
 Results and coverage are saved to Documents/Comment Finder Results.

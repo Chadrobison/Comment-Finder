@@ -20,6 +20,6 @@ if [ ! -x .venv/bin/python ]; then
   "$PYTHON" -m venv .venv || return 1
 fi
 .venv/bin/python -c 'import tkinter, sys; assert (3, 10) <= sys.version_info[:2] <= (3, 13)' || return 1
-if ! .venv/bin/python -c 'import instaloader; assert instaloader.__version__ == "4.15.1"' 2>/dev/null; then
+if ! .venv/bin/python -c 'import instaloader; assert instaloader.__version__ == "4.16"' 2>/dev/null; then
   .venv/bin/python -m pip install -r requirements.txt || return 1
 fi

@@ -10,6 +10,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 import auth
 from core import Collector, Settings, LIMITATION, StorageError, Stop, username, filtered, save_csv
 
+APP_VERSION = '1.1.1'
 RESULTS = Path.home() / 'Documents' / 'Comment Finder Results'
 
 class App:
@@ -24,7 +25,7 @@ class App:
         self.login_dialog = None
         self.code_request = None
         self.rows, self.visible, self.folder = [], [], None
-        root.title('Comment Finder')
+        root.title(f'Comment Finder {APP_VERSION}')
         root.geometry('1100x820')
         root.minsize(850, 720)
         style = ttk.Style(root)
@@ -486,7 +487,7 @@ def smoke_test(report_path=None):
     from unittest.mock import patch
     from core import atomic_write
 
-    report = {'status': 'failed', 'mode': 'offline_synthetic', 'checks': [],
+    report = {'status': 'failed', 'mode': 'offline_synthetic', 'app_version': APP_VERSION, 'checks': [],
               'platform': platform.system(), 'architecture': platform.machine(),
               'frozen': bool(getattr(sys, 'frozen', False))}
     root = None
@@ -507,6 +508,24 @@ def smoke_test(report_path=None):
                 raise AssertionError('The bundled certificate file is missing.')
             report['instaloader_version'] = instaloader.__version__
             report['checks'].append('backend_import_and_certificates')
+            import compatibility
+            from types import SimpleNamespace
+            calls = []
+            def synthetic_query(doc_id, variables, referer=None, web_api=False):
+                calls.append((doc_id, variables, referer, web_api))
+                return {'synthetic_only': True}
+            context = SimpleNamespace(doc_id_graphql_query=synthetic_query)
+            if not compatibility.install_metadata_routes(context):
+                raise AssertionError('The pinned metadata routing adapter was not active.')
+            variables = {'synthetic_only': True}
+            for metadata_id in compatibility._METADATA_PHASES:
+                context.doc_id_graphql_query(metadata_id, variables)
+                if calls[-1][3] is not True or calls[-1][1] is not variables:
+                    raise AssertionError('Metadata routing did not preserve the query and select web_api.')
+            context.doc_id_graphql_query('SYNTHETIC_UNRELATED_QUERY', variables)
+            if calls[-1][3] is not False:
+                raise AssertionError('Metadata routing changed an unrelated query.')
+            report['checks'].append('metadata_routing_backport_active')
             with patch.object(instaloader.Instaloader, 'load_session_from_file', forbidden), \
                  patch.object(instaloader.Instaloader, 'load_session', forbidden), \
                  patch.object(auth.SessionStore, 'load', forbidden), \

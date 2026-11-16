@@ -151,8 +151,18 @@ class CoreTests(unittest.TestCase):
         c=self.collector(Source())
         self.assertEqual(c.run(),'finished')
         message=self.events[-1][1]['message']
+        self.assertIn('No comments or replies were examined',message)
+        self.assertIn('cannot determine whether',message)
+        self.assertNotIn('No matches found',message)
+
+    def test_examined_nonmatching_comment_has_bounded_no_match_message(self):
+        c=self.collector(Source([post(1,[comment(1,author='synthetic_other')])]))
+        self.assertEqual(c.run(),'finished')
+        self.assertEqual(c.examined,1)
+        message=self.events[-1][1]['message']
         self.assertIn('No matches found in the material checked',message)
         self.assertIn('does not mean',message)
+        self.assertNotIn('No comments or replies were examined',message)
 
     def test_separate_folders_and_unfinished_status_during_collection(self):
         c=self.collector(Source())

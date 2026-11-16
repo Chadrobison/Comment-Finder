@@ -113,6 +113,33 @@ class SourceTests(unittest.TestCase):
             self.assertIs(requests.Session.send, transport)
             self.load.assert_not_called()
 
+    def test_rejection_reasons_are_allowlisted_and_latched_without_raw_body(self):
+        cases=[
+            (400, {'message':'feedback_required SYNTHETIC-SECRET'}, 'blocked', 'feedback_required'),
+            (400, {'error_type':'challenge_required'}, 'blocked', 'challenge_required'),
+            (400, {'checkpoint_url':'https://secret.invalid/SYNTHETIC-SECRET'}, 'blocked', 'checkpoint_required'),
+            (400, {'message':'login_required'}, 'authentication', 'login_required'),
+            (400, {'errors':[{'message':'invalid doc id SYNTHETIC-SECRET'}]}, 'error', 'invalid doc id'),
+            (400, {'message':'Please wait a few minutes SYNTHETIC-SECRET'}, 'blocked', 'please_wait'),
+            (200, {'message':'feedback_required'}, 'blocked', 'feedback_required'),
+            (400, ['SYNTHETIC-SECRET'], 'error', None),
+        ]
+        for code,body,status,reason in cases:
+            with self.subTest(code=code,body=body),patch.object(requests.Session,'send',return_value=response(code,body)) as transport:
+                with InstagramSource(self.settings,self.cancel) as source:
+                    source.set_phase('replies')
+                    with self.assertRaises(Stop) as caught:
+                        requests.Session().send(self.request)
+                    self.assertEqual(caught.exception.status,status)
+                    self.assertIn('replies',str(caught.exception))
+                    self.assertNotIn('SYNTHETIC-SECRET',str(caught.exception))
+                    self.assertNotIn('secret.invalid',str(caught.exception))
+                    if reason:self.assertIn(reason,str(caught.exception))
+                    with self.assertRaises(Stop) as repeat:
+                        requests.Session().send(self.request)
+                    self.assertEqual(str(repeat.exception),str(caught.exception))
+                    self.assertEqual(transport.call_count,1)
+
     def test_managed_session_uses_dictionary_interface_only(self):
         data = {'sessionid': 'SYNTHETIC-SESSION-TOKEN', 'csrftoken': 'SYNTHETIC-CSRF'}
         settings = Settings('synthetic_author', 'synthetic_owner', login_user='synthetic_login',

@@ -159,6 +159,9 @@ class Collector:
         data = dict(status=status, detail=detail, examined=self.examined, matches=len(self.rows),
                     limitation=LIMITATION, author=self.settings.author, accounts=self.settings.accounts,
                     limits={k: getattr(self.settings, k) for k in ('max_posts','max_comments','max_replies','max_total')})
+        backend = getattr(self.source, 'diagnostics', None)
+        if isinstance(backend, dict):
+            data['collection_backend'] = backend.copy()
         atomic_write(self.folder / 'status.json', lambda f: json.dump(data, f, indent=2))
 
     def walk(self, factory, limit, scope, item, visit):
@@ -176,6 +179,9 @@ class Collector:
         if self.examined >= self.settings.max_total:
             self.record(scope, item, 'global_capped', detail='Whole-search comment/reply limit reached.')
             return
+        phase = {'posts': 'post listing', 'parent_comments': 'comments', 'replies': 'replies'}.get(scope, 'connection')
+        set_phase = getattr(self.source, 'set_phase', lambda value: None)
+        set_phase(phase)
         iterator = iter(factory())
         count = 0
         while count < limit:
@@ -184,6 +190,7 @@ class Collector:
                 self.record(scope, item, 'global_capped', count, 'Whole-search comment/reply limit reached.')
                 return
             try:
+                set_phase(phase)
                 value = next(iterator)
             except StopIteration:
                 self.record(scope, item, 'iterator_exhausted', count, 'Iterator ended; not proof of complete historical coverage.')
@@ -292,7 +299,9 @@ class Collector:
         except StorageError as error:
             status, detail = 'write_error', str(error)
         message = MESSAGES[status]
-        if not self.rows:
+        if self.examined == 0:
+            message += ' No comments or replies were examined. This search cannot determine whether the account has commented.'
+        elif not self.rows:
             message += ' No matches found in the material checked; this does not mean the account has never commented.'
         self.emit('done', dict(status=status, message=message, detail=detail, folder=str(self.folder)))
         return status

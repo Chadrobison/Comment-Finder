@@ -158,7 +158,8 @@ class UiTests(unittest.TestCase):
             self.mode = 'fail:' + mode
             self.complete_search()
             self.assertIn(phrase, self.app.status.get())
-            self.assertIn('does not mean', self.app.status.get())
+            self.assertIn('No comments or replies were examined', self.app.status.get())
+            self.assertIn('cannot determine whether', self.app.status.get())
 
     def test_advanced_collapsed_and_session_picker_never_loads(self):
         self.assertFalse(self.app.advanced.winfo_manager())
